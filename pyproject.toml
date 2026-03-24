@@ -1,8 +1,9 @@
 [project]
-name = "repl-nix-workspace"
+name = "stash-nfogenerator"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.11"
+readme = "README.md"
+requires-python = ">=3.12"
 dependencies = [
     "stashapp-tools>=0.2.58",
 ]

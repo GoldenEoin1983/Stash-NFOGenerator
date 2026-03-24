@@ -232,11 +232,89 @@ class StashApiClient:
         except Exception as e:
             raise RuntimeError(f"Failed to search scenes: {e}")
     
+    def get_all_scenes(self, page_size: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get all scenes with file paths using pagination.
+
+        Args:
+            page_size: Number of scenes per page
+
+        Returns:
+            List of scene data dictionaries with file paths and metadata
+        """
+        # Query includes all fields needed for NFO generation
+        query = """
+        query FindScenes($filter: FindFilterType) {
+            findScenes(filter: $filter) {
+                count
+                scenes {
+                    id
+                    title
+                    details
+                    date
+                    rating100
+                    studio {
+                        name
+                    }
+                    performers {
+                        name
+                        gender
+                    }
+                    tags {
+                        name
+                    }
+                    files {
+                        path
+                        duration
+                        video_codec
+                        audio_codec
+                        width
+                        height
+                        frame_rate
+                        bit_rate
+                    }
+                    created_at
+                    updated_at
+                }
+            }
+        }
+        """
+
+        all_scenes = []
+        page = 1
+
+        while True:
+            variables = {
+                "filter": {
+                    "page": page,
+                    "per_page": page_size,
+                    "sort": "id",
+                    "direction": "ASC"
+                }
+            }
+
+            result = self.stash.call_GQL(query, variables)
+            scenes = result.get("findScenes", {}).get("scenes", [])
+
+            if not scenes:
+                break
+
+            all_scenes.extend(scenes)
+
+            # Check if we got all scenes
+            total_count = result.get("findScenes", {}).get("count", 0)
+            if len(all_scenes) >= total_count:
+                break
+
+            page += 1
+
+        return all_scenes
+
     def get_connection_info(self) -> Dict[str, Any]:
         """Get connection information for display."""
         return {
             "host": self.config["host"],
-            "port": self.config["port"], 
+            "port": self.config["port"],
             "scheme": self.config["scheme"],
             "authenticated": "ApiKey" in self.config or ("username" in self.config and "password" in self.config)
         }

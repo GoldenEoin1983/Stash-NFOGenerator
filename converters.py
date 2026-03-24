@@ -43,12 +43,21 @@ class StashToNfoConverter:
         # Basic metadata
         nfo_data['title'] = scene_data.get('title', '')
         nfo_data['originaltitle'] = scene_data.get('title', '')
+        # Optional short tagline/one-liner from scene data
+        nfo_data['tagline'] = scene_data.get('tagline', '')
         nfo_data['plot'] = scene_data.get('details', '')
 
-        # Rating (convert from StashApp rating to 0-10 scale)
+        # Rating - handle both API format (rating100: 0-100) and JSON format (rating: 1-5)
+        rating100 = scene_data.get('rating100')
         rating = scene_data.get('rating')
-        if rating is not None:
-            # Assume StashApp rating is 1-5, convert to 0-10
+        if rating100 is not None:
+            # API format: 0-100 scale, convert to 0-10
+            try:
+                nfo_data['userrating'] = float(rating100) / 10
+            except (ValueError, TypeError):
+                nfo_data['userrating'] = 0
+        elif rating is not None:
+            # JSON format: 1-5 scale, convert to 0-10
             try:
                 nfo_data['userrating'] = float(rating) * 2
             except (ValueError, TypeError):
@@ -66,30 +75,53 @@ class StashToNfoConverter:
             except (ValueError, TypeError):
                 pass
 
-        # Studio
-        nfo_data['studio'] = scene_data.get('studio', '')
+        # Date added (from created_at timestamp)
+        created_at = scene_data.get('created_at')
+        if created_at:
+            nfo_data['dateadded'] = self._convert_date(created_at)
 
-        # URL as unique ID
-        url = scene_data.get('url')
-        if url:
+        # Studio - handle both string and object format {name: "..."}
+        studio = scene_data.get('studio')
+        if isinstance(studio, dict):
+            nfo_data['studio'] = studio.get('name', '')
+        elif isinstance(studio, str):
+            nfo_data['studio'] = studio
+        else:
+            nfo_data['studio'] = ''
+
+        # Stash ID as unique ID
+        scene_id = scene_data.get('id')
+        if scene_id:
             nfo_data['uniqueid'] = {
                 'type': 'stash',
-                'value': url,
+                'value': str(scene_id),
                 'default': True
             }
 
-        # Genres from tags
+        # Genres from tags - handle both string list and object list [{name: "..."}]
         tags = scene_data.get('tags', [])
         if isinstance(tags, list):
-            nfo_data['genres'] = tags
+            genres = []
+            for tag in tags:
+                if isinstance(tag, dict):
+                    genres.append(tag.get('name', ''))
+                elif isinstance(tag, str):
+                    genres.append(tag)
+            nfo_data['genres'] = [g for g in genres if g]  # Filter empty strings
 
         # Performers as actors
         performers = scene_data.get('performers', [])
         if isinstance(performers, list):
             nfo_data['actors'] = self._convert_performers_to_actors(performers)
 
-        # File information for runtime
+        # File information - handle API format (files: [{...}]) and JSON format (file: {...})
+        files = scene_data.get('files', [])
         file_info = scene_data.get('file', {})
+
+        # Use first file from files array if available (API format)
+        if files and isinstance(files, list) and len(files) > 0:
+            file_info = files[0]
+
         if isinstance(file_info, dict):
             duration = file_info.get('duration')
             if duration:
@@ -98,6 +130,19 @@ class StashToNfoConverter:
                     nfo_data['runtime'] = int(float(duration) / 60)
                 except (ValueError, TypeError):
                     pass
+
+            # Build fileinfo for stream details
+            nfo_data['fileinfo'] = {
+                'video': {
+                    'codec': file_info.get('video_codec', ''),
+                    'width': file_info.get('width'),
+                    'height': file_info.get('height'),
+                    'duration': file_info.get('duration'),
+                },
+                'audio': {
+                    'codec': file_info.get('audio_codec', ''),
+                }
+            }
 
         return nfo_data
 
@@ -196,9 +241,12 @@ class StashToNfoConverter:
             if isinstance(performer, str):
                 actor['name'] = performer
                 actor['role'] = ''
+                actor['gender'] = ''
             elif isinstance(performer, dict):
                 actor['name'] = performer.get('name', '')
                 actor['role'] = performer.get('role', '')
+                # Gender field from API response
+                actor['gender'] = performer.get('gender', '')
             else:
                 continue
 

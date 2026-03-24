@@ -42,21 +42,31 @@ class NfoGenerator:
     def _generate_movie_nfo(self, nfo_data: Dict[str, Any]) -> str:
         """Generate movie NFO XML."""
         root = ET.Element('movie')
-        
+
         # Basic metadata
         self._add_text_element(root, 'title', nfo_data.get('title', ''))
         self._add_text_element(root, 'originaltitle', nfo_data.get('originaltitle', ''))
+        # Optional tagline (short one-line description)
+        self._add_text_element(root, 'tagline', nfo_data.get('tagline', ''))
         self._add_text_element(root, 'plot', nfo_data.get('plot', ''))
-        
+
+        # MPAA rating (default XXX for adult content)
+        mpaa = nfo_data.get('mpaa', 'XXX')
+        self._add_text_element(root, 'mpaa', mpaa)
+
         # Rating
         userrating = nfo_data.get('userrating', 0)
         self._add_text_element(root, 'userrating', str(userrating))
         
         # Date information
+        dateadded = nfo_data.get('dateadded')
+        if dateadded:
+            self._add_text_element(root, 'dateadded', dateadded)
+
         premiered = nfo_data.get('premiered')
         if premiered:
             self._add_text_element(root, 'premiered', premiered)
-        
+
         year = nfo_data.get('year')
         if year:
             self._add_text_element(root, 'year', str(year))
@@ -96,19 +106,50 @@ class NfoGenerator:
         for actor_data in actors:
             if isinstance(actor_data, dict):
                 actor_elem = ET.SubElement(root, 'actor')
-                
+
                 name = actor_data.get('name', '')
                 if name:
                     self._add_text_element(actor_elem, 'name', name)
-                
+
+                # Gender field for Jellyfin
+                gender = actor_data.get('gender', '')
+                if gender:
+                    self._add_text_element(actor_elem, 'gender', gender)
+
                 role = actor_data.get('role', '')
                 if role:
                     self._add_text_element(actor_elem, 'role', role)
-                
+
                 order = actor_data.get('order')
                 if order is not None:
                     self._add_text_element(actor_elem, 'order', str(order))
-        
+
+        # File info with stream details (video/audio codec info)
+        fileinfo = nfo_data.get('fileinfo')
+        if fileinfo and isinstance(fileinfo, dict):
+            fileinfo_elem = ET.SubElement(root, 'fileinfo')
+            streamdetails_elem = ET.SubElement(fileinfo_elem, 'streamdetails')
+
+            # Video stream info
+            video_info = fileinfo.get('video', {})
+            if video_info:
+                video_elem = ET.SubElement(streamdetails_elem, 'video')
+                if video_info.get('codec'):
+                    self._add_text_element(video_elem, 'codec', video_info['codec'])
+                if video_info.get('width'):
+                    self._add_text_element(video_elem, 'width', str(video_info['width']))
+                if video_info.get('height'):
+                    self._add_text_element(video_elem, 'height', str(video_info['height']))
+                if video_info.get('duration'):
+                    self._add_text_element(video_elem, 'durationinseconds', str(video_info['duration']))
+
+            # Audio stream info
+            audio_info = fileinfo.get('audio', {})
+            if audio_info:
+                audio_elem = ET.SubElement(streamdetails_elem, 'audio')
+                if audio_info.get('codec'):
+                    self._add_text_element(audio_elem, 'codec', audio_info['codec'])
+
         return self._format_xml(root)
     
     def _generate_actor_nfo(self, nfo_data: Dict[str, Any]) -> str:

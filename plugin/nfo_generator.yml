@@ -1,0 +1,17 @@
+name: Jellyfin NFO Generator
+description: Generate Jellyfin-compatible NFO files for all scenes in the library
+version: 1.0
+url: https://github.com/user/Stash-NFOGenerator
+
+exec:
+  - python
+  - "{pluginDir}/nfo_generator.py"
+
+interface: raw
+errLog: error
+
+tasks:
+  - name: Generate NFO for All Scenes
+    description: Creates .nfo metadata files next to each scene's video file for Jellyfin compatibility
+    defaultArgs:
+      mode: all_scenes
